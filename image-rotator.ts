@@ -2,15 +2,7 @@ import fs from "fs";
 
 type Pixels = number[][];
 
-const readXBytesFromOffsetLE = ({
-  offset,
-  buffer,
-  x,
-}: {
-  offset: number;
-  x: number;
-  buffer: Buffer;
-}) => {
+const readXBytesFromOffsetLE = ({ offset, x }: { offset: number; x: number }, buffer: Buffer) => {
   let num: number = 0;
 
   for (let i = 0; i < x; i++) {
@@ -21,57 +13,46 @@ const readXBytesFromOffsetLE = ({
   return num;
 };
 
-const rotateImage = () => {
-  let imageBuffer = fs.readFileSync("images/teapot.bmp");
+const rotateImage = (image: string) => {
+  const imageBuffer = fs.readFileSync(image);
 
-  const offset = readXBytesFromOffsetLE({ x: 4, offset: 10, buffer: imageBuffer });
-  const width = readXBytesFromOffsetLE({ x: 4, offset: 18, buffer: imageBuffer });
-  const height = readXBytesFromOffsetLE({ x: 4, offset: 22, buffer: imageBuffer });
+  const offset = readXBytesFromOffsetLE({ x: 4, offset: 10 }, imageBuffer);
+  const width = readXBytesFromOffsetLE({ x: 4, offset: 18 }, imageBuffer);
+  const bitsPerPixel = readXBytesFromOffsetLE({ x: 2, offset: 28 }, imageBuffer);
+  const bytesPerPixel =  bitsPerPixel / 8;
 
-  let headerBytes = imageBuffer.subarray(0, offset);
-  let dataBytes = imageBuffer.subarray(offset);
+  const dataBytes = imageBuffer.subarray(offset);
 
-  const pixels: Pixels = [];
-
-  let i = 0;
-  for (const [, byte] of dataBytes.entries()) {
-    if (i % 3 === 0) {
-      pixels.push([byte]);
-    } else {
-      pixels[pixels.length - 1].push(byte);
-    }
-    i++;
-  }
-
+  let pixels: Pixels = [];
   const rows: Pixels[] = [];
 
-  let j = 0;
-  pixels.forEach((pixel) => {
-    if (j % height === 0) {
-      rows.push([pixel]);
-    } else {
-      rows[rows.length - 1].push(pixel);
-    }
-    j++;
+  for (const [idx, byte] of dataBytes.entries()) {
+    if (idx % bytesPerPixel === 0) pixels.push([]);
+    pixels[pixels.length - 1].push(byte);
+  }
+
+  pixels.forEach((pixel, idx) => {
+    if (idx % width === 0) rows.push([]);
+    rows[rows.length - 1].push(pixel);
   });
 
-  let newRows: Pixels[] = [];
+  const newImageRows: Pixels[] = [];
 
   rows.forEach((row, i) => {
     row.forEach((_, j) => {
-      if (!newRows[j]) newRows.push([]);
-      newRows[j][i] = rows[i][j];
+      if (!newImageRows[j]) newImageRows.push([]);
+      newImageRows[j][i] = rows[i][j];
     });
   });
 
-  newRows.reverse();
+  newImageRows.reverse();
 
   const newImage = Buffer.concat([
-    headerBytes,
-    Buffer.from(newRows.flat().flat()),
+    imageBuffer.subarray(0, offset),
+    Buffer.from(newImageRows.flat().flat()),
   ]);
 
   fs.writeFileSync("./images/output.bmp", newImage);
 };
 
-rotateImage();
+rotateImage("images/teapot.bmp");
